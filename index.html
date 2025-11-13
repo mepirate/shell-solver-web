@@ -17,7 +17,7 @@ pre{white-space:pre-wrap;background:#f3f6fb;padding:12px;border-radius:8px;overf
 <div class="card">
   <h1>Shell Solver</h1>
   <form id="solverForm">
-    <label>Enter 8-letter start (clockwise from 12, letters R/Y/G/B)</label>
+    <label>Enter 8-letter start (clockwise from 12, letters RYGB, etc.)</label>
     <input id="startInput" maxlength="8" required>
     <button type="submit">Solve</button>
   </form>
@@ -32,23 +32,28 @@ const ADJ = {
 };
 const GOAL = ["R","Y","G","Y","R","B","G","B",null];
 
+// Convert state array to a unique string key for BFS, handling null
+function stateKey(state){
+    return state.map(v => v===null ? "." : v).join("");
+}
+
 function bfsSolve(startState){
     if(startState.every((v,i)=>v===GOAL[i])) return [];
     let queue = [{state:startState, path:[]}];
-    let seen = new Set([startState.join("")]);
+    let seen = new Set([stateKey(startState)]);
     while(queue.length>0){
-        let {state,path} = queue.shift();
+        let {state, path} = queue.shift();
         let empty = state.indexOf(null);
         for(let src of ADJ[empty]){
             if(state[src]===null) continue;
             let next = state.slice();
             next[empty]=next[src]; next[src]=null;
-            let key=next.join("");
+            let key = stateKey(next);
             if(seen.has(key)) continue;
             seen.add(key);
             let move = {tile: state[src], src, dst: empty};
             if(next.every((v,i)=>v===GOAL[i])) return path.concat([move]);
-            queue.push({state:next, path:path.concat([move])});
+            queue.push({state: next, path: path.concat([move])});
         }
     }
     return null;
