@@ -1,246 +1,91 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Shell Solver — Fixed Solver</title>
+<title>Shell Solver</title>
 <style>
-  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial; background:#f6f8fb; margin:0; padding:24px; color:#0b1220}
-  .wrap{max-width:920px;margin:0 auto}
-  .card{background:#fff;border-radius:12px;padding:16px;margin-top:18px;box-shadow:0 6px 20px rgba(8,20,40,0.06)}
-  label{display:block;margin-top:8px;font-weight:600}
-  input[type="text"]{width:100%;padding:10px;border-radius:8px;border:1px solid #d7dbe6;font-size:1rem}
-  button{margin-top:10px;padding:10px 12px;border-radius:8px;border:0;background:#0f62fe;color:white;font-weight:600;cursor:pointer}
-  button.secondary{background:#e6eefc;color:#0f62fe}
-  pre{white-space:pre-wrap;background:#f3f6fb;padding:12px;border-radius:8px;overflow:auto}
-  .grid{display:grid;grid-template-columns:repeat(3,60px);gap:6px;margin-top:10px}
-  .cell{height:60px;width:60px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;color:white}
-  .R{background:#c92a2a} .Y{background:#f2c94c;color:#111}
-  .G{background:#2aa653} .B{background:#2b67f6}
-  .dot{background:transparent;color:#666;border:2px dashed #ddd;border-radius:8px;font-weight:700}
-  .move-line{padding:8px 0;border-bottom:1px dashed #eee}
-  .controls{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
-  small{color:#666}
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;background:#f6f8fb;margin:0;padding:24px;color:#0b1220}
+.card{background:#fff;border-radius:12px;padding:16px;box-shadow:0 6px 20px rgba(8,20,40,0.06);max-width:800px;margin:0 auto}
+h1{margin-top:0;font-size:1.3rem}
+input[type=text]{width:100%;padding:10px;margin-top:6px;border-radius:8px;border:1px solid #d7dbe6;font-size:1rem}
+button{margin-top:10px;padding:10px 12px;border-radius:8px;border:0;background:#0f62fe;color:white;font-weight:600;cursor:pointer}
+pre{white-space:pre-wrap;background:#f3f6fb;padding:12px;border-radius:8px;overflow:auto}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="card">
-    <h1>Shell Solver — Fixed Solver</h1>
-    <p>Enter the starting 8-letter ring (clockwise from 12). Use letters <b>R Y G B</b>. Example: <i>RYYGRGBB</i>.</p>
-
-    <label for="start">Start (8 letters)</label>
-    <input id="start" placeholder="e.g. RYGYRBGB" maxlength="8" />
-
-    <div class="controls">
-      <button id="solveBtn">Solve</button>
-      <button id="randomBtn" class="secondary">Randomize</button>
-      <button id="testBtn" class="secondary">Test sample (GBRYRBGY)</button>
-      <button id="downloadBtn" class="secondary" disabled>Download .txt</button>
-      <div style="margin-left:auto"><small>Goal (fixed): <b>RYGYRBGB</b></small></div>
-    </div>
-
-    <div id="status" style="margin-top:12px;color:#0b1220"></div>
-  </div>
-
-  <div id="resultCard" class="card" style="display:none">
-    <h3>Solution (<span id="moveCount"></span> moves)</h3>
-
-    <div style="display:flex;gap:18px;flex-wrap:wrap">
-      <div style="min-width:220px">
-        <div><small>Current board</small></div>
-        <div id="board" class="grid" style="margin-top:8px"></div>
-      </div>
-
-      <div style="flex:1">
-        <div><small>Step-by-step list (click a line to preview that step)</small></div>
-        <div id="movesList" style="margin-top:8px;max-height:420px;overflow:auto"></div>
-      </div>
-    </div>
-  </div>
-
-  <footer style="margin-top:18px;color:#666;font-size:0.9rem">
-    <p>Tip: Use <code>Test sample</code> to confirm the solver works. If it finds a solution you'll get a verified, legal move list and a downloadable .txt.</p>
-  </footer>
+<div class="card">
+  <h1>Shell Solver</h1>
+  <form id="solverForm">
+    <label>Enter 8-letter start (clockwise from 12, letters R/Y/G/B)</label>
+    <input id="startInput" maxlength="8" required>
+    <button type="submit">Solve</button>
+  </form>
+  <div id="result" style="margin-top:12px;"></div>
 </div>
 
 <script>
-/* DEBUG toggle - set to true to print BFS logs in console */
-const DEBUG = false;
+const POS_LABELS = {0:"12",1:"1",2:"3",3:"5",4:"6",5:"7",6:"9",7:"11",8:"C"};
+const ADJ = {
+    0:[7,1], 1:[0,2], 2:[1,8,3], 3:[2,4], 4:[3,5],
+    5:[4,6], 6:[5,7,8], 7:[6,0], 8:[2,6]
+};
+const GOAL = ["R","Y","G","Y","R","B","G","B",null];
 
-/* Position labels and adjacency (exact rules provided) */
-const POS_LABEL = {0:"12",1:"1",2:"3",3:"5",4:"6",5:"7",6:"9",7:"11",8:"C"};
-const ADJ = { 0:[7,1], 1:[0,2], 2:[1,8,3], 3:[2,4], 4:[3,5], 5:[4,6], 6:[5,7,8], 7:[6,0], 8:[2,6] };
-const GOAL_STR = "RYGYRBGB";
-
-/* helpers */
-function parseStart(s){
-  s = (s||"").trim().toUpperCase();
-  if(s.length !== 8) return null;
-  for(let ch of s) if(!"RYGB".includes(ch)) return null;
-  const arr = [];
-  for(let i=0;i<8;i++) arr.push(s[i]);
-  arr.push(null); // center empty
-  return arr;
-}
-function stateKey(state){
-  // key uses ring only + '.' as center marker
-  return state.slice(0,8).join('') + (state[8] === null ? '.' : state[8]);
-}
-function ringEqualsGoal(state){
-  return state.slice(0,8).join('') === GOAL_STR && state[8] === null;
-}
-
-/* BFS solver - robust, explicit */
 function bfsSolve(startState){
-  const startKey = stateKey(startState);
-  const goalRing = GOAL_STR;
-  const queue = [];
-  const seen = new Set();
-
-  queue.push({ state: startState, path: [] });
-  seen.add(stateKey(startState));
-
-  let iterations = 0;
-  while(queue.length){
-    const node = queue.shift();
-    iterations++;
-    const s = node.state;
-    if(ringEqualsGoal(s)){
-      if(DEBUG) console.log("BFS iterations:", iterations);
-      return node.path;
-    }
-    const empty = s.indexOf(null);
-    const sources = ADJ[empty];
-    for(const src of sources){
-      if(s[src] === null) continue;
-      const next = s.slice();
-      next[empty] = next[src];
-      next[src] = null;
-      const k = stateKey(next);
-      if(seen.has(k)) continue;
-      seen.add(k);
-      const move = { tile: s[src], src: src, dst: empty };
-      queue.push({ state: next, path: node.path.concat([move]) });
-    }
-  }
-  if(DEBUG) console.log("BFS iterations (no solution):", iterations);
-  return null;
-}
-
-/* UI renderers */
-function renderBoard(state, container){
-  container.innerHTML = "";
-  const order = [7,0,1, 6,8,2, 5,4,3];
-  for(let i=0;i<9;i++){
-    const idx = order[i];
-    const val = state[idx];
-    const el = document.createElement('div');
-    el.className = 'cell';
-    if(val === null){
-      el.classList.add('dot');
-      el.textContent = '';
-    } else {
-      el.classList.add(val);
-      el.textContent = val;
-    }
-    container.appendChild(el);
-  }
-}
-function movesToText(moves){
-  return moves.map((m,i) => `${i+1}. Slide ${m.tile} from ${POS_LABEL[m.src]} -> ${POS_LABEL[m.dst]}`);
-}
-
-/* DOM wiring */
-const startInput = document.getElementById('start');
-const solveBtn = document.getElementById('solveBtn');
-const randomBtn = document.getElementById('randomBtn');
-const testBtn = document.getElementById('testBtn');
-const downloadBtn = document.getElementById('downloadBtn');
-const status = document.getElementById('status');
-const resultCard = document.getElementById('resultCard');
-const boardEl = document.getElementById('board');
-const movesList = document.getElementById('movesList');
-const moveCount = document.getElementById('moveCount');
-
-function setStatus(msg, isErr=false){
-  status.textContent = msg;
-  status.style.color = isErr ? '#b02a37' : '#0b1220';
-}
-
-/* solve action */
-solveBtn.addEventListener('click', () => {
-  resultCard.style.display = 'none';
-  downloadBtn.disabled = true;
-  setStatus('');
-  const startArr = parseStart(startInput.value);
-  if(!startArr){ setStatus('Enter 8 characters using only R Y G B (clockwise from 12).', true); return; }
-  setStatus('Solving…');
-  // small timeout so UI updates
-  setTimeout(()=>{
-    const moves = bfsSolve(startArr);
-    if(!moves){ setStatus('No solution found under the given constraints.', true); return; }
-    setStatus('Solution found — verified legal moves.');
-    resultCard.style.display = 'block';
-    moveCount.textContent = moves.length;
-    renderBoard(startArr, boardEl);
-    movesList.innerHTML = "";
-    const lines = movesToText(moves);
-    // build replayable preview
-    moves.forEach((m, idx) => {
-      const div = document.createElement('div');
-      div.className = 'move-line';
-      div.textContent = lines[idx];
-      div.style.cursor = 'pointer';
-      div.addEventListener('click', () => {
-        // replay to step idx
-        let st = startArr.slice();
-        for(let k=0;k<=idx;k++){
-          st[moves[k].dst] = st[moves[k].src];
-          st[moves[k].src] = null;
+    if(startState.every((v,i)=>v===GOAL[i])) return [];
+    let queue = [{state:startState, path:[]}];
+    let seen = new Set([startState.join("")]);
+    while(queue.length>0){
+        let {state,path} = queue.shift();
+        let empty = state.indexOf(null);
+        for(let src of ADJ[empty]){
+            if(state[src]===null) continue;
+            let next = state.slice();
+            next[empty]=next[src]; next[src]=null;
+            let key=next.join("");
+            if(seen.has(key)) continue;
+            seen.add(key);
+            let move = {tile: state[src], src, dst: empty};
+            if(next.every((v,i)=>v===GOAL[i])) return path.concat([move]);
+            queue.push({state:next, path:path.concat([move])});
         }
-        renderBoard(st, boardEl);
-      });
-      movesList.appendChild(div);
-    });
-    // final board
-    const finalState = startArr.slice();
-    moves.forEach(m => {
-      finalState[m.dst] = finalState[m.src];
-      finalState[m.src] = null;
-    });
-    renderBoard(finalState, boardEl);
-    // enable download
-    downloadBtn.disabled = false;
-    downloadBtn.onclick = () => {
-      const header = `Solution for start: ${startInput.value.trim().toUpperCase()}\nGoal: ${GOAL_STR}\n\n`;
-      const body = lines.join('\n');
-      const blob = new Blob([header, body], {type:'text/plain'});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `solution_${startInput.value.trim().toUpperCase()}.txt`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    };
-  }, 10);
-});
+    }
+    return null;
+}
 
-/* randomize and test sample */
-randomBtn.addEventListener('click', () => {
-  const letters = ['R','Y','G','B'];
-  let s = '';
-  for(let i=0;i<8;i++) s += letters[Math.floor(Math.random()*letters.length)];
-  startInput.value = s;
-  setStatus('');
-});
-testBtn.addEventListener('click', () => {
-  startInput.value = 'GBRYRBGY';
-  setStatus('Filled test sample (GBRYRBGY). Press Solve.');
-});
+function applyMoves(start,moves){
+    let s=start.slice();
+    for(let m of moves){ s[m.dst]=s[m.src]; s[m.src]=null; }
+    return s;
+}
 
+document.getElementById("solverForm").addEventListener("submit",e=>{
+    e.preventDefault();
+    let input=document.getElementById("startInput").value.trim().toUpperCase();
+    if(input.length!==8||!/^[RYGB]{8}$/.test(input)){
+        alert("Input must be 8 letters: R/Y/G/B");
+        return;
+    }
+    let start=input.split(""); start.push(null);
+    let moves=bfsSolve(start);
+    let resultDiv=document.getElementById("result");
+    if(!moves){
+        resultDiv.innerHTML="<p style='color:red'>No solution found under the given constraints.</p>";
+        return;
+    }
+    let out=["Solution ("+moves.length+" moves):"];
+    moves.forEach((m,i)=>out.push((i+1)+". Slide "+m.tile+" from "+POS_LABELS[m.src]+" -> "+POS_LABELS[m.dst]));
+    // verification
+    let final=applyMoves(start,moves);
+    let ring_final=final.slice(0,8).map(v=>v||".").join("");
+    let center_final=final[8]===null?"Yes":"No";
+    out.push("\nVerification:");
+    out.push("Final ring: "+ring_final);
+    out.push("Center empty: "+center_final);
+    out.push("Matches goal: "+(final.every((v,i)=>v===GOAL[i])?"Yes":"No"));
+    resultDiv.innerHTML="<pre>"+out.join("\n")+"</pre>";
+});
 </script>
 </body>
 </html>
