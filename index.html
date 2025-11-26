@@ -1,95 +1,85 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
+<meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Shell Solver</title>
 <style>
 body{font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;background:#f6f8fb;margin:0;padding:24px;color:#0b1220}
-.card{background:#fff;border-radius:12px;padding:16px;box-shadow:0 6px 20px rgba(8,20,40,0.06);max-width:800px;margin:0 auto}
+.layout{display:flex;gap:20px;align-items:flex-start}
+.left-pane{flex:0 0 520px;position:sticky;top:20px}
+.iframe-wrapper{width:100%;height:800px;border-radius:12px;overflow:hidden;box-shadow:0 6px 20px rgba(8,20,40,0.06)}
+.right-pane{flex:1}
+.card{background:#fff;border-radius:12px;padding:16px;box-shadow:0 6px 20px rgba(8,20,40,0.06);max-width:650px}
 h1{margin-top:0;font-size:1.3rem}
 input[type=text]{width:100%;padding:10px;margin-top:6px;border-radius:8px;border:1px solid #d7dbe6;font-size:1rem}
 button{margin-top:10px;padding:10px 12px;border-radius:8px;border:0;background:#0f62fe;color:white;font-weight:600;cursor:pointer}
 pre{white-space:pre-wrap;background:#f3f6fb;padding:12px;border-radius:8px;overflow:auto}
+.move-highlight{font-weight:bold;background:#fff1a8;padding:2px 4px;border-radius:4px}
 </style>
 </head>
 <body>
-<div class="card">
-  <h1>Shell Solver</h1>
-  <form id="solverForm">
-    <label>Enter 8-letter start (clockwise from 12, letters RYGB, etc.)</label>
-    <input id="startInput" maxlength="8" required>
-    <button type="submit">Solve</button>
-  </form>
-  <div id="result" style="margin-top:12px;"></div>
+<div class="layout">
+  <div class="left-pane">
+    <div class="iframe-wrapper">
+      <iframe src="https://jeffw.gikkman.com/" style="width:100%;height:100%;border:0;"></iframe>
+    </div>
+  </div>
+
+  <div class="right-pane">
+    <div class="card">
+      <h1>Shell Solver</h1>
+      <form id="solverForm">
+        <label>Enter 8-letter start (clockwise from 12, letters RYGB, etc.)</label>
+        <input id="startInput" onkeydown="if(event.key==='Enter'){event.preventDefault(); document.getElementById('solveBtn').click(); return false;}" maxlength="8" required>
+        <button id='solveBtn' type='submit'>Solve</button>
+      </form>
+      <div id="result" style="margin-top:12px;"></div>
+    </div>
+  </div>
 </div>
 
 <script>
-const POS_LABELS = {0:"12",1:"1",2:"3",3:"5",4:"6",5:"7",6:"9",7:"11",8:"C"};
-const ADJ = {
-    0:[7,1], 1:[0,2], 2:[1,8,3], 3:[2,4], 4:[3,5],
-    5:[4,6], 6:[5,7,8], 7:[6,0], 8:[2,6]
-};
-const GOAL = ["R","Y","G","Y","R","B","G","B",null];
+const POS_LABELS={0:"12",1:"1",2:"3",3:"5",4:"6",5:"7",6:"9",7:"11",8:"C"};
+const ADJ={0:[7,1],1:[0,2],2:[1,8,3],3:[2,4],4:[3,5],5:[4,6],6:[5,7,8],7:[6,0],8:[2,6]};
+const GOAL=["R","Y","G","Y","R","B","G","B",null];
 
-// Convert state array to a unique string key for BFS, handling null
-function stateKey(state){
-    return state.map(v => v===null ? "." : v).join("");
-}
-
-function bfsSolve(startState){
-    if(startState.every((v,i)=>v===GOAL[i])) return [];
-    let queue = [{state:startState, path:[]}];
-    let seen = new Set([stateKey(startState)]);
-    while(queue.length>0){
-        let {state, path} = queue.shift();
-        let empty = state.indexOf(null);
-        for(let src of ADJ[empty]){
-            if(state[src]===null) continue;
-            let next = state.slice();
-            next[empty]=next[src]; next[src]=null;
-            let key = stateKey(next);
-            if(seen.has(key)) continue;
-            seen.add(key);
-            let move = {tile: state[src], src, dst: empty};
-            if(next.every((v,i)=>v===GOAL[i])) return path.concat([move]);
-            queue.push({state: next, path: path.concat([move])});
-        }
-    }
-    return null;
-}
-
-function applyMoves(start,moves){
-    let s=start.slice();
-    for(let m of moves){ s[m.dst]=s[m.src]; s[m.src]=null; }
-    return s;
-}
+function stateKey(state){return state.map(v=>v===null?".":v).join("");}
+function bfsSolve(startState){if(startState.every((v,i)=>v===GOAL[i]))return[];let queue=[{state:startState,path:[]}];let seen=new Set([stateKey(startState)]);while(queue.length){let{state,path}=queue.shift();let empty=state.indexOf(null);for(let src of ADJ[empty]){if(state[src]===null)continue;let next=state.slice();next[empty]=next[src];next[src]=null;let key=stateKey(next);if(seen.has(key))continue;seen.add(key);let move={tile:state[src],src,dst:empty};if(next.every((v,i)=>v===GOAL[i]))return path.concat([move]);queue.push({state:next,path:path.concat([move])});}}return null;}
+function applyMoves(start,moves){let s=start.slice();for(let m of moves){s[m.dst]=s[m.src];s[m.src]=null;}return s;}
 
 document.getElementById("solverForm").addEventListener("submit",e=>{
     e.preventDefault();
     let input=document.getElementById("startInput").value.trim().toUpperCase();
-    if(input.length!==8||!/^[RYGB]{8}$/.test(input)){
-        alert("Input must be 8 letters: R/Y/G/B");
-        return;
-    }
-    let start=input.split(""); start.push(null);
+    if(input.length!==8||!/^[RYGB]{8}$/.test(input)){alert("Input must be 8 letters: R/Y/G/B");return;}
+
+    let start=input.split("");start.push(null);
     let moves=bfsSolve(start);
     let resultDiv=document.getElementById("result");
-    if(!moves){
-        resultDiv.innerHTML="<p style='color:red'>No solution found under the given constraints.</p>";
-        return;
-    }
-    let out=["Solution ("+moves.length+" moves):"];
-    moves.forEach((m,i)=>out.push((i+1)+". Slide "+m.tile+" from "+POS_LABELS[m.src]+" -> "+POS_LABELS[m.dst]));
-    // verification
+    if(!moves){resultDiv.innerHTML="<p style='color:red'>No solution found under the given constraints.</p>";return;}
+
+    let criticalCount=0;
+    let out=["Solution ("+moves.length+" moves):\n"];
+    moves.forEach((m,i)=>{
+        let isCritical=(m.dst===2||m.dst===6); // highlight only moves INTO 3 or 9 o'clock
+        let line=(i+1)+". Slide "+m.tile+" from "+POS_LABELS[m.src]+" → "+POS_LABELS[m.dst];
+        if(isCritical){
+            criticalCount++;
+            line=`<span class='move-highlight'>${line}  (#${criticalCount})</span>`;
+        }
+        out.push(line);
+    });
+
     let final=applyMoves(start,moves);
     let ring_final=final.slice(0,8).map(v=>v||".").join("");
     let center_final=final[8]===null?"Yes":"No";
+
     out.push("\nVerification:");
     out.push("Final ring: "+ring_final);
     out.push("Center empty: "+center_final);
     out.push("Matches goal: "+(final.every((v,i)=>v===GOAL[i])?"Yes":"No"));
-    resultDiv.innerHTML="<pre>"+out.join("\n")+"</pre>";
+
+    resultDiv.innerHTML=`<pre>${out.join("\n")}</pre>`;
 });
 </script>
 </body>
